@@ -7,21 +7,15 @@ import (
 	"github.com/ghibranalj/sqauto"
 )
 
-type User struct {
-	ID   int    `sq:"id"`
-	Name string `sq:"name"`
-	SomethingID int        `sq:"something_id"`
-	Something   *Something `sq:"something"`
-	CarID int        `sq:"car_id"`
-	Car   *Car `sq:"car"`
+type Client struct {
+	ID        int    `sq:"id"`
+	Username  string `sq:"username"`
+	PartnerID int `sq:"partner_id"`
+
+	Partner Partner `sq:"partner"`
 }
 
-type Something struct {
-	ID   int    `sq:"id"`
-	Name string `sq:"name"`
-}
-
-type Car struct {
+type Partner struct {
 	ID   int    `sq:"id"`
 	Name string `sq:"name"`
 }
@@ -29,8 +23,7 @@ type Car struct {
 func main() {
 
 	b := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
-	query, args, _ := sqauto.SelectJoin(b, "user", User{}, "something", "car")
+	query, _, _ := sqauto.SelectJoin(b, "client", Client{}, "partner")
 
 	fmt.Println(query)
-	fmt.Println(args)
 }

@@ -69,23 +69,21 @@ func Select(b sq.StatementBuilderType, table string, obj any) (string, []any, er
 	return sb.From(table).ToSql()
 }
 
-
 func SelectJoin(b sq.StatementBuilderType, table string, obj any, jointable ...string) (string, []any, error) {
+
 	st := reflect.TypeOf(obj)
-
 	selectstr := ""
-
-	lookup := make(map[string]bool)
+	otherTable := make(map[string]bool)
 	for _, v := range jointable {
-		lookup[v] = true
+		otherTable[v] = true
 	}
 
 	for i := 0; i < st.NumField(); i++ {
 		field := st.Field(i)
 		name := field.Tag.Get("sq")
 
-		if lookup[name] {
-			initial := string(name[0])
+		if otherTable[name] {
+
 			stchild := reflect.TypeOf(reflect.ValueOf(obj).Field(i).Interface())
 			// if pointer, get the type of the pointer
 			if stchild.Kind() == reflect.Ptr {
@@ -94,24 +92,20 @@ func SelectJoin(b sq.StatementBuilderType, table string, obj any, jointable ...s
 			for j := 0; j < stchild.NumField(); j++ {
 				fieldchild := stchild.Field(j)
 				namechild := fieldchild.Tag.Get("sq")
-				selectstr += initial + "." + namechild + " AS " + name + "." + namechild + ", "
+				selectstr += name + "." + namechild + " AS " + "\"" + name + "." + namechild + "\"" + ", "
 			}
 			continue
 		}
-		selectstr += name + ", "
+
+		selectstr += table + "." + name + ", "
 	}
 	// remove last comma
 	selectstr = selectstr[:len(selectstr)-2]
-	sb := b.Select(selectstr)
+	sb := b.Select(selectstr).From(table)
 
-	for i := 0; i < st.NumField(); i++ {
-		name := st.Field(i).Tag.Get("sq")
-		if !lookup[name] {
-			continue
-		}
-		initial := string(name[0])
-		sb = sb.Join(name + " AS " + initial + " ON " + string(name[0]) + "." + name + "_id = " + initial + ".id")
+	for _, jtable := range jointable {
+		sb = sb.Join(jtable + " ON " + table + "." + jtable + "_id = " + jtable + ".id")
 	}
 
-	return sb.From(table).ToSql()
+	return sb.ToSql()
 }
