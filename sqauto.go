@@ -1,6 +1,8 @@
 package sqauto
 
 import (
+	"bytes"
+	"fmt"
 	"reflect"
 
 	sq "github.com/Masterminds/squirrel"
@@ -56,23 +58,10 @@ func CoalesceUpdate(b sq.StatementBuilderType, table string, obj any) (string, [
 	return ub.ToSql()
 }
 
-func Select(b sq.StatementBuilderType, table string, obj any) (string, []any, error) {
-	st := reflect.TypeOf(obj)
-	sb := b.Select()
-
-	for i := 0; i < st.NumField(); i++ {
-		field := st.Field(i)
-		name := field.Tag.Get("sq")
-		sb = sb.Columns(name)
-	}
-
-	return sb.From(table).ToSql()
-}
-
 func SelectJoin(b sq.StatementBuilderType, table string, obj any, jointable ...string) (string, []any, error) {
-
 	st := reflect.TypeOf(obj)
-	selectstr := ""
+
+	selectbuf := bytes.NewBuffer([]byte{})
 	otherTable := make(map[string]bool)
 	for _, v := range jointable {
 		otherTable[v] = true
@@ -83,7 +72,6 @@ func SelectJoin(b sq.StatementBuilderType, table string, obj any, jointable ...s
 		name := field.Tag.Get("sq")
 
 		if otherTable[name] {
-
 			stchild := reflect.TypeOf(reflect.ValueOf(obj).Field(i).Interface())
 			// if pointer, get the type of the pointer
 			if stchild.Kind() == reflect.Ptr {
@@ -92,19 +80,21 @@ func SelectJoin(b sq.StatementBuilderType, table string, obj any, jointable ...s
 			for j := 0; j < stchild.NumField(); j++ {
 				fieldchild := stchild.Field(j)
 				namechild := fieldchild.Tag.Get("sq")
-				selectstr += name + "." + namechild + " AS " + "\"" + name + "." + namechild + "\"" + ", "
+				fmt.Fprintf(selectbuf, `%s.%s AS "%s.%s", `, name, namechild, name, namechild)
 			}
 			continue
 		}
-
-		selectstr += table + "." + name + ", "
+		fmt.Fprintf(selectbuf, `%s.%s, `, table, name)
 	}
+	str := selectbuf.String()
 	// remove last comma
-	selectstr = selectstr[:len(selectstr)-2]
-	sb := b.Select(selectstr).From(table)
+	str = str[:len(str)-2]
+	sb := b.Select(str).From(table)
 
 	for _, jtable := range jointable {
-		sb = sb.Join(jtable + " ON " + table + "." + jtable + "_id = " + jtable + ".id")
+		// JOIN example ON table.example_id = example.id
+		joinstr := fmt.Sprintf("%s ON %s.%s_id = %s.id", jtable, table, jtable, jtable)
+		sb = sb.Join(joinstr)
 	}
 
 	return sb.ToSql()

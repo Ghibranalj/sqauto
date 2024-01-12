@@ -10,7 +10,7 @@ import (
 type Client struct {
 	ID        int    `sq:"id"`
 	Username  string `sq:"username"`
-	PartnerID int `sq:"partner_id"`
+	PartnerID int    `sq:"partner_id"`
 
 	Partner Partner `sq:"partner"`
 }
