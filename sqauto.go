@@ -70,9 +70,12 @@ func SelectJoin(b sq.StatementBuilderType, table string, obj any, jointable ...s
 	for i := 0; i < st.NumField(); i++ {
 		field := st.Field(i)
 		name := field.Tag.Get("sq")
+		if name == "" {
+			name = toSnakeCase(field.Name)
+		}
 
+		stchild := reflect.TypeOf(reflect.ValueOf(obj).Field(i).Interface())
 		if otherTable[name] {
-			stchild := reflect.TypeOf(reflect.ValueOf(obj).Field(i).Interface())
 			// if pointer, get the type of the pointer
 			if stchild.Kind() == reflect.Ptr {
 				stchild = stchild.Elem()
@@ -80,15 +83,21 @@ func SelectJoin(b sq.StatementBuilderType, table string, obj any, jointable ...s
 			for j := 0; j < stchild.NumField(); j++ {
 				fieldchild := stchild.Field(j)
 				namechild := fieldchild.Tag.Get("sq")
-				fmt.Fprintf(selectbuf, `%s.%s AS "%s.%s", `, name, namechild, name, namechild)
+				if namechild == "" {
+					namechild = toSnakeCase(fieldchild.Name)
+				}
+				// get grandchild
+
+				fmt.Fprintf(selectbuf, `%s.%s AS "%s.%s",`+"\n", name, namechild, name, namechild)
 			}
 			continue
 		}
-		fmt.Fprintf(selectbuf, `%s.%s, `, table, name)
+
+		fmt.Fprintf(selectbuf, `%s.%s, `+"\n", table, name)
 	}
 	str := selectbuf.String()
 	// remove last comma
-	str = str[:len(str)-2]
+	str = str[:len(str)-3]
 	sb := b.Select(str).From(table)
 
 	for _, jtable := range jointable {
