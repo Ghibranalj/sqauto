@@ -8,22 +8,42 @@ import (
 )
 
 type Client struct {
-	ID        int    `sq:"id"`
-	Username  string `sq:"username"`
-	PartnerID int    `sq:"partner_id"`
-
-	Partner Partner `sq:"partner"`
+	ID        int
+	Username  string
+	PartnerID int
+	Partner Partner
 }
 
 type Partner struct {
-	ID   int    `sq:"id"`
-	Name string `sq:"name"`
+	ID   int
+	Name string
+	CarID int
+
+	Car Car
+	Clients []Client
+}
+
+type Car struct {
+	ID   int
+	Name string
 }
 
 func main() {
+	sb := sqauto.Join(sq.StatementBuilder.PlaceholderFormat(sq.Dollar),
+		sqauto.Table{Name: "client", Object: Client{}},
+		sqauto.JoinTable{Name: "partner", Object: Partner{}, Alias: "partner"})
 
-	b := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
-	query, _, _ := sqauto.SelectJoin(b, "client", Client{}, "partner")
-
+	query, _, _ := sb.ToSql()
 	fmt.Println(query)
+
+	query, _, _ = sqauto.Insert(sq.StatementBuilder.PlaceholderFormat(sq.Dollar),
+		sqauto.Table{Name: "client", Object: Client{ID: 1, Username: "ghibran", PartnerID: 1}},
+	).ToSql()
+	fmt.Println(query)
+
+	query, _,_ = sqauto.CoalesceUpdate(sq.StatementBuilder.PlaceholderFormat(sq.Dollar),
+		sqauto.Table{Name: "client", Object: Client{Username: "ghibran", PartnerID: 1}},
+	).ToSql()
+	fmt.Println(query)
+
 }

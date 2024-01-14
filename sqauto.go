@@ -1,110 +1,138 @@
 package sqauto
 
 import (
-	"bytes"
-	"fmt"
 	"reflect"
 
 	sq "github.com/Masterminds/squirrel"
 )
 
-func Insert(b sq.StatementBuilderType, table string, obj any) (string, []any, error) {
-	st := reflect.TypeOf(obj)
-	ib := b.Insert(table)
+
+type Table struct {
+	Name   string
+	Object any
+
+	// primary key column name
+	// default "id"
+	PrimaryKey string
+}
+
+// if a is not zero, return a
+// if a is zero, return b
+func or[T any](a, b T) T {
+	if reflect.ValueOf(a).IsZero() {
+		return b
+	}
+	return a
+}
+
+// Insert will insert all non-zero fields into the table
+// if primary key is zero, it will not insert
+//
+// TODO dont select columns that are not in the table like:
+// other structs, slices, maps, etc
+// but this still needs to allow structs like:
+// time.Time, null.String, null.Int, etc
+func Insert(b sq.StatementBuilderType, table Table) sq.InsertBuilder {
+	table.PrimaryKey = or(table.PrimaryKey, "id")
+
+	obj := table.Object
+	st := reflect.TypeOf(table.Object)
+	ib := b.Insert(table.Name)
 	var values []any
 
 	for i := 0; i < st.NumField(); i++ {
 		field := st.Field(i)
-		name := field.Tag.Get("sq")
+		name := or(field.Tag.Get("sq"), toSnakeCase(field.Name))
+		if reflect.ValueOf(obj).Field(i).IsZero() {
+			continue
+		}
 		ib = ib.Columns(name)
 		values = append(values, reflect.ValueOf(obj).Field(i).Interface())
 	}
 	ib = ib.Values(values...)
 
-	return ib.ToSql()
+	return ib
 }
 
-func Update(b sq.StatementBuilderType, table string, obj any) (string, []any, error) {
+// UpdateAll will update all fields into the table
+// if primary key is zero or empty, it will not update
+func UpdateAll(b sq.StatementBuilderType, table Table) sq.UpdateBuilder {
+	table.PrimaryKey = or(table.PrimaryKey, "id")
+
+	obj := table.Object
 	st := reflect.TypeOf(obj)
-	ub := b.Update(table)
-	var values []any
+	ub := b.Update(table.Name)
 
 	for i := 0; i < st.NumField(); i++ {
 		field := st.Field(i)
-		name := field.Tag.Get("sq")
+		name := or(field.Tag.Get("sq"), toSnakeCase(field.Name))
+		if name == table.PrimaryKey &&
+			reflect.ValueOf(table.Object).Field(i).IsZero() {
+			continue
+		}
 		ub = ub.Set(name, reflect.ValueOf(obj).Field(i).Interface())
-		values = append(values, reflect.ValueOf(obj).Field(i).Interface())
 	}
 
-	return ub.ToSql()
+	return ub
 }
 
-func CoalesceUpdate(b sq.StatementBuilderType, table string, obj any) (string, []any, error) {
+// CoalesceUpdate will only update fields that are not zero or empty
+// if primary key is zero or empty, it will not update
+func CoalesceUpdate(b sq.StatementBuilderType, table Table) sq.UpdateBuilder {
+	table.PrimaryKey = or(table.PrimaryKey, "id")
+
+	obj := table.Object
 	st := reflect.TypeOf(obj)
-	ub := b.Update(table)
-	var values []any
+	ub := b.Update(table.Name)
 
 	for i := 0; i < st.NumField(); i++ {
 		field := st.Field(i)
-		name := field.Tag.Get("sq")
+		name := or(field.Tag.Get("sq"), toSnakeCase(field.Name))
 		// if value is not zero or empty, set it
 		if reflect.ValueOf(obj).Field(i).IsZero() {
 			continue
 		}
+
 		ub = ub.Set(name, reflect.ValueOf(obj).Field(i).Interface())
-		values = append(values, reflect.ValueOf(obj).Field(i).Interface())
 	}
 
-	return ub.ToSql()
+	return ub
 }
 
-func SelectJoin(b sq.StatementBuilderType, table string, obj any, jointable ...string) (string, []any, error) {
-	st := reflect.TypeOf(obj)
 
-	selectbuf := bytes.NewBuffer([]byte{})
-	otherTable := make(map[string]bool)
-	for _, v := range jointable {
-		otherTable[v] = true
+// TODO dont select columns that are not in the table like:
+// other structs, slices, maps, etc
+// but this still needs to allow structs like:
+// time.Time, null.String, null.Int, etc
+func InsertMany (b sq.StatementBuilderType, table Table) sq.InsertBuilder {
+	sliceType := reflect.TypeOf(table.Object)
+	if sliceType.Kind() != reflect.Slice {
+		panic("object must be a slice")
+	}
+	ib := b.Insert(table.Name)
+
+	elem := sliceType.Elem()
+	for i := 0; i < elem.NumField(); i++ {
+		field := elem.Field(i)
+		name := or(field.Tag.Get("sq"), toSnakeCase(field.Name))
+		ib = ib.Columns(name)
 	}
 
-	for i := 0; i < st.NumField(); i++ {
-		field := st.Field(i)
-		name := field.Tag.Get("sq")
-		if name == "" {
-			name = toSnakeCase(field.Name)
-		}
-
-		stchild := reflect.TypeOf(reflect.ValueOf(obj).Field(i).Interface())
-		if otherTable[name] {
-			// if pointer, get the type of the pointer
-			if stchild.Kind() == reflect.Ptr {
-				stchild = stchild.Elem()
+	// iterate over slice
+	slice := reflect.ValueOf(table.Object)
+	for i := 0; i < slice.Len(); i++ {
+		// iterate over struct fields
+		for j := 0; j < elem.NumField(); j++ {
+			val := slice.Index(i).Field(j).Interface()
+			// dont insert zero values
+			if reflect.ValueOf(val).IsZero() {
+				ib = ib.Values(nil)
+				continue
 			}
-			for j := 0; j < stchild.NumField(); j++ {
-				fieldchild := stchild.Field(j)
-				namechild := fieldchild.Tag.Get("sq")
-				if namechild == "" {
-					namechild = toSnakeCase(fieldchild.Name)
-				}
-				// get grandchild
 
-				fmt.Fprintf(selectbuf, `%s.%s AS "%s.%s",`+"\n", name, namechild, name, namechild)
-			}
-			continue
+			ib = ib.Values(val)
 		}
-
-		fmt.Fprintf(selectbuf, `%s.%s, `+"\n", table, name)
-	}
-	str := selectbuf.String()
-	// remove last comma
-	str = str[:len(str)-3]
-	sb := b.Select(str).From(table)
-
-	for _, jtable := range jointable {
-		// JOIN example ON table.example_id = example.id
-		joinstr := fmt.Sprintf("%s ON %s.%s_id = %s.id", jtable, table, jtable, jtable)
-		sb = sb.Join(joinstr)
 	}
 
-	return sb.ToSql()
+	return ib
 }
