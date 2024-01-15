@@ -20,10 +20,10 @@ query,args,err := sq.Querybuilder.
 I was tired of this, especially when i have a struct with 10+ fields.
 With `sqauto` you can now just call one function.
 ```go
-obj := objStruct{ Id:69, Field1:"foo", Field2:"bar", Field3:"42"}
+obj := objStruct{ Id: 69, Field1: "foo", Field2: "bar", Field3: "42"}
 query, args , err:= sqauto.Insert(
                         sq.Querybuilder,
-                        sqauto.Table{Name:"tableName",Object:obj}
+                        sqauto.Table{ Name:"tableName", Object: obj}
                         ).Tosql()
 )
 ```

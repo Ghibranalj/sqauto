@@ -1,6 +1,6 @@
 module github.com/ghibranalj/sqauto
 
-go 1.21.5
+go 1.21
 
 require github.com/Masterminds/squirrel v1.5.4
 
