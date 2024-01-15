@@ -28,13 +28,14 @@ type Spouse struct {
 	MaidenName nullString
 	BirthDate  time.Time
 	CarID      int64
-	Car        Car
+	Cars	   []Car
 }
 
 type Car struct {
 	ID           int64
 	Make         string
 	LicencePlate nullString
+	SpouseID     int64
 }
 
 // remove newlines and tabs

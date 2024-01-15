@@ -129,16 +129,13 @@ func insertMany(b sq.StatementBuilderType, table Table) sq.InsertBuilder {
 	for i := 0; i < slice.Len(); i++ {
 		// iterate over struct fields
 		for j := 0; j < elem.NumField(); j++ {
-			val := slice.Index(i).Field(j).Interface()
-			// dont insert zero values
 			if skipped[j] {
 				continue
 			}
+			val := slice.Index(i).Field(j).Interface()
 			if reflect.ValueOf(val).IsZero() {
-				ib = ib.Values(nil)
-				continue
+				val = nil
 			}
-
 			ib = ib.Values(val)
 		}
 	}
