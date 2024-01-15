@@ -27,11 +27,6 @@ func or[T any](a, b T) T {
 
 // Insert will insert all non-zero fields into the table
 // if primary key is zero, it will not insert
-//
-// TODO dont select columns that are not in the table like:
-// other structs, slices, maps, etc
-// but this still needs to allow structs like:
-// time.Time, null.String, null.Int, etc
 func Insert(b sq.StatementBuilderType, table Table) sq.InsertBuilder {
 	table.PrimaryKey = or(table.PrimaryKey, "id")
 
@@ -44,6 +39,9 @@ func Insert(b sq.StatementBuilderType, table Table) sq.InsertBuilder {
 		field := st.Field(i)
 		name := or(field.Tag.Get("sq"), toSnakeCase(field.Name))
 		if reflect.ValueOf(obj).Field(i).IsZero() {
+			continue
+		}
+		if ! insertIncluded(field.Type) {
 			continue
 		}
 		ib = ib.Columns(name)
@@ -76,9 +74,9 @@ func UpdateAll(b sq.StatementBuilderType, table Table) sq.UpdateBuilder {
 	return ub
 }
 
-// CoalesceUpdate will only update fields that are not zero or empty
+// Update will only update fields that are not zero or empty
 // if primary key is zero or empty, it will not update
-func CoalesceUpdate(b sq.StatementBuilderType, table Table) sq.UpdateBuilder {
+func Update(b sq.StatementBuilderType, table Table) sq.UpdateBuilder {
 	table.PrimaryKey = or(table.PrimaryKey, "id")
 
 	obj := table.Object
