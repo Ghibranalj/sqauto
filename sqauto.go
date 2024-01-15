@@ -131,11 +131,11 @@ func insertMany(b sq.StatementBuilderType, table Table) sq.InsertBuilder {
 		for j := 0; j < elem.NumField(); j++ {
 			val := slice.Index(i).Field(j).Interface()
 			// dont insert zero values
-			if reflect.ValueOf(val).IsZero() {
-				ib = ib.Values(nil)
+			if skipped[j] {
 				continue
 			}
-			if skipped[j] {
+			if reflect.ValueOf(val).IsZero() {
+				ib = ib.Values(nil)
 				continue
 			}
 
