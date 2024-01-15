@@ -8,7 +8,6 @@ import (
 )
 
 
-
 func TestJoin(t *testing.T){
 	expected := trim(`
 		SELECT *,
