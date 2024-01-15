@@ -32,6 +32,9 @@ func Join(b sq.StatementBuilderType, mainTable Table, joins ...JoinTable) sq.Sel
 		for i := 0; i < st.NumField(); i++ {
 			field := st.Field(i)
 			name := or(field.Tag.Get("sq"), toSnakeCase(field.Name))
+			if ! selectIncluded(field.Type) {
+				continue
+			}
 			// SELECT alias.field AS "alias.field"
 			sb = sb.Column(fmt.Sprintf(`%s.%s AS "%s.%s"`, alias, name, alias, name))
 		}

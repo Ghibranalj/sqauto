@@ -110,10 +110,17 @@ func InsertMany (b sq.StatementBuilderType, table Table) sq.InsertBuilder {
 		panic("object must be a slice")
 	}
 	ib := b.Insert(table.Name)
+	skipped := map[int]bool{}
 
 	elem := sliceType.Elem()
 	for i := 0; i < elem.NumField(); i++ {
 		field := elem.Field(i)
+
+		if ! insertIncluded(field.Type) {
+			skipped[i] = true
+			continue
+		}
+
 		name := or(field.Tag.Get("sq"), toSnakeCase(field.Name))
 		ib = ib.Columns(name)
 	}
@@ -127,6 +134,9 @@ func InsertMany (b sq.StatementBuilderType, table Table) sq.InsertBuilder {
 			// dont insert zero values
 			if reflect.ValueOf(val).IsZero() {
 				ib = ib.Values(nil)
+				continue
+			}
+			if skipped[j] {
 				continue
 			}
 
