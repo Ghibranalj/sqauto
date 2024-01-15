@@ -6,7 +6,6 @@ import (
 	sq "github.com/Masterminds/squirrel"
 )
 
-
 type Table struct {
 	Name   string
 	Object any
@@ -25,9 +24,15 @@ func or[T any](a, b T) T {
 	return a
 }
 
-// Insert will insert all non-zero fields into the table
-// if primary key is zero, it will not insert
 func Insert(b sq.StatementBuilderType, table Table) sq.InsertBuilder {
+	if reflect.TypeOf(table.Object).Kind() == reflect.Slice ||
+		reflect.TypeOf(table.Object).Kind() == reflect.Array {
+		return insertMany(b, table)
+	}
+	return insertOne(b, table)
+}
+
+func insertOne(b sq.StatementBuilderType, table Table) sq.InsertBuilder {
 	table.PrimaryKey = or(table.PrimaryKey, "id")
 
 	obj := table.Object
@@ -41,7 +46,7 @@ func Insert(b sq.StatementBuilderType, table Table) sq.InsertBuilder {
 		if reflect.ValueOf(obj).Field(i).IsZero() {
 			continue
 		}
-		if ! insertIncluded(field.Type) {
+		if !insertIncluded(field.Type) {
 			continue
 		}
 		ib = ib.Columns(name)
@@ -97,14 +102,10 @@ func Update(b sq.StatementBuilderType, table Table) sq.UpdateBuilder {
 	return ub
 }
 
-
-// TODO dont select columns that are not in the table like:
-// other structs, slices, maps, etc
-// but this still needs to allow structs like:
-// time.Time, null.String, null.Int, etc
-func InsertMany (b sq.StatementBuilderType, table Table) sq.InsertBuilder {
+// insert slice
+func insertMany(b sq.StatementBuilderType, table Table) sq.InsertBuilder {
 	sliceType := reflect.TypeOf(table.Object)
-	if sliceType.Kind() != reflect.Slice {
+	if sliceType.Kind() != reflect.Slice || sliceType.Kind() != reflect.Array {
 		panic("object must be a slice")
 	}
 	ib := b.Insert(table.Name)
@@ -114,7 +115,7 @@ func InsertMany (b sq.StatementBuilderType, table Table) sq.InsertBuilder {
 	for i := 0; i < elem.NumField(); i++ {
 		field := elem.Field(i)
 
-		if ! insertIncluded(field.Type) {
+		if !insertIncluded(field.Type) {
 			skipped[i] = true
 			continue
 		}
